@@ -14,7 +14,7 @@ def homogeneous_pass_qmix(params, hidden_state, obs, dones, agent=None):
 
     hidden_state = hidden_state.reshape(hidden_state.shape[0]*hidden_state.shape[1], hidden_state.shape[2])
     hidden_state, q_vals = agent.apply(params, hidden_state, batched_input)
- 
+
     q_vals = q_vals.reshape(*original_shape[:-1], -1) # (time_steps, n_envs, n_agents, action_dim)
 
     return q_vals
@@ -32,7 +32,26 @@ def homogeneous_pass_mappo(params, hidden_state, obs, dones, agent=None):
 
     hidden_state = hidden_state.reshape(hidden_state.shape[0]*hidden_state.shape[1], hidden_state.shape[2])
     hidden_state, pi = agent.apply(params, hidden_state, batched_input)
- 
+
+    pi = pi.probs  # (time_steps, n_envs, n_agents, action_dim)
+    pi = pi.reshape(*original_shape[:-1], -1)
+
+    return pi
+
+def homogeneous_pass_ippo(params, hidden_state, obs, dones, agent=None):
+    """
+    Forward pass for ippo, copied from ippo_rnn_mpe.py
+    """
+    original_shape = obs.shape
+    # concatenate agents and parallel envs to process them in one batch
+    batched_input = (
+        obs.reshape(1, obs.shape[0]*obs.shape[1], obs.shape[2]), # [1, n_envs*n_agents, obs_dim] for broadcasting with scanned
+        dones.reshape(1, dones.shape[0]*dones.shape[1]) # [1, n_envs*n_agents] for broadcasting with scanned
+    )
+
+    hidden_state = hidden_state.reshape(hidden_state.shape[0]*hidden_state.shape[1], hidden_state.shape[2])
+    hidden_state, pi, value = agent.apply(params, hidden_state, batched_input)
+
     pi = pi.probs  # (time_steps, n_envs, n_agents, action_dim)
     pi = pi.reshape(*original_shape[:-1], -1)
 
@@ -59,12 +78,17 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
 
         hiddens = hiddens.reshape(original_shape[0], original_shape[1], original_shape[2], -1) # [n_agents, timesteps, batch_dim, hidden_dim]
         hiddens = jnp.transpose(hiddens, (1, 2, 0, 3)) # [n_agents, batch_dim, n_agents, hidden_dim]
-    
+
     if alg == 'mappo':
         rollouts = jnp.transpose(rollouts, (0, 2, 1, 3)) # [timesteps, batch_dim, n_agents, obs_dim]
         hiddens = jnp.transpose(hiddens, (0, 2, 1, 3)) # [timesteps, batch_dim, n_agents, obs_dim]
         policy = homogeneous_pass_mappo
-    
+
+    if alg == 'ippo':
+        rollouts = jnp.transpose(rollouts, (0, 2, 1, 3)) # [timesteps, batch_dim, n_agents, obs_dim]
+        hiddens = jnp.transpose(hiddens, (0, 2, 1, 3)) # [timesteps, batch_dim, n_agents, obs_dim]
+        policy = homogeneous_pass_ippo
+
     timesteps, batch_size, n_agents, obs_dim = rollouts.shape
 
     def mask_obs(agent_i):
@@ -77,16 +101,16 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
         obs_i = obs[:, :, agent_i, :]
         obs_i = obs_i[:, :, None, :] # add extra dim for broadcasting
         obs_masked = jnp.tile(obs_i, (1, 1, n_agents, 1))
-        
+
         return jnp.concatenate((obs_masked, cap), axis=-1)
-    
+
     def get_policy_outputs(agent_i):
         """
         Using mask obs, get policy outputs for masked observations simulating generating
         outputs for the same observation conditioned on different capabilities
         """
         obs = mask_obs(agent_i)
-        
+
         # duplicate hidden state for i across each agent
         hs = hiddens[:, :, agent_i, :]
         hs = hs[:, :, None, :] # add extra dim for broadcasting
@@ -101,7 +125,7 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
         # vectorize the policy over timesteps, necessary for use with scanned functions
         carry = None
         _, outputs = jax.lax.scan(apply_policy_per_timestep, carry, jnp.arange(timesteps))
-        
+
         return outputs
 
 
@@ -109,7 +133,7 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
         """
         Using get policy outputs, compute the distance between the distributions outputted by
         corresponding observations, add to flatten into a vector containing the added distances
-        between i and each other agent 
+        between i and each other agent
         """
         if alg == 'qmix':
             qvals_i = get_policy_outputs(agent_i) # [timesteps, batch_size, n_agents, action_dim]
@@ -118,7 +142,7 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
             qval_maxs = jnp.max(qvals_i, axis=-1, keepdims=True)
             qvals_i = qvals_i - qval_maxs
             categorical_i = jnp.exp(qvals_i) / jnp.sum(jnp.exp(qvals_i), axis=-1, keepdims=True)
-        elif alg == 'mappo':
+        elif alg == 'mappo' or alg == 'ippo':
             categorical_i = get_policy_outputs(agent_i)
         else:
             categorical_i = get_policy_outputs(agent_i)
@@ -126,7 +150,7 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
         # get pairwise distance between agent i and all other agents
         def tvd_for_agent_j(j):
             return total_variational_distance(categorical_i[:, :, agent_i, :], categorical_i[:, :, j, :])
-        
+
         tvd_all_agents = jax.vmap(tvd_for_agent_j)(jnp.arange(n_agents))  # [n_agents, timesteps, batch_size]
 
         return tvd_all_agents  # [n_agents, batch_size, timesteps]
@@ -157,7 +181,7 @@ def dummy_homogenous_policy_2(params, hs, obs, dones, agent=None):
     """
     batch_size, n_agents, obs_dim = hs.shape
 
-    qvals = jnp.arange(1, n_agents + 1) 
+    qvals = jnp.arange(1, n_agents + 1)
     qvals = jnp.tile(qvals, (batch_size, 1))
     qvals = qvals[:, :, None]  # add dim for tiling
 
