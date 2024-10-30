@@ -45,12 +45,12 @@ def homogeneous_pass_ippo(params, hidden_state, obs, dones, agent=None):
     original_shape = obs.shape
     # concatenate agents and parallel envs to process them in one batch
     batched_input = (
-        obs.reshape(1, obs.shape[0]*obs.shape[1], obs.shape[2]), # [1, n_envs*n_agents, obs_dim] for broadcasting with scanned
-        dones.reshape(1, dones.shape[0]*dones.shape[1]) # [1, n_envs*n_agents] for broadcasting with scanned
+        obs.reshape(1, obs.shape[0], obs.shape[1], obs.shape[2]), # [1, n_envs*n_agents, obs_dim] for broadcasting with scanned
+        dones.reshape(1, dones.shape[0], dones.shape[1]) # [1, n_envs*n_agents] for broadcasting with scanned
     )
 
-    hidden_state = hidden_state.reshape(hidden_state.shape[0]*hidden_state.shape[1], hidden_state.shape[2])
-    hidden_state, pi, value = agent.apply(params, hidden_state, batched_input)
+    hidden_state = hidden_state.reshape(hidden_state.shape[0], hidden_state.shape[1], hidden_state.shape[2])
+    _, pi, _ = jax.vmap(agent.apply, in_axes=(0, 1, 2))(params, hidden_state, batched_input)
 
     pi = pi.probs  # (time_steps, n_envs, n_agents, action_dim)
     pi = pi.reshape(*original_shape[:-1], -1)

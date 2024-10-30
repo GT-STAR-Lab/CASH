@@ -44,19 +44,24 @@ class ScannedRNN(nn.Module):
         """Applies the module."""
         rnn_state = carry
         ins, resets = x
+        print(f"ins {ins.shape}")
+        print(f"resets {resets.shape}")
+        print(f"hidden {rnn_state.shape}")
+        hidden_size = ins.shape[-1]
+        batch_size = ins.shape[:-1]
         rnn_state = jnp.where(
             resets[:, np.newaxis],
-            self.initialize_carry(*rnn_state.shape),
+            self.initialize_carry(hidden_size, *batch_size),
             rnn_state,
         )
         new_rnn_state, y = nn.GRUCell(features=ins.shape[1])(rnn_state, ins)
         return new_rnn_state, y
 
     @staticmethod
-    def initialize_carry(batch_size, hidden_size):
+    def initialize_carry(hidden_size, *batch_size):
         # Use a dummy key since the default state init fn is just zeros.
         cell = nn.GRUCell(features=hidden_size)
-        return cell.initialize_carry(jax.random.PRNGKey(0), (batch_size, hidden_size))
+        return cell.initialize_carry(jax.random.PRNGKey(0), (*batch_size, hidden_size))
 
 
 class ActorCriticRNN(nn.Module):
@@ -106,9 +111,13 @@ class Transition(NamedTuple):
     info: jnp.ndarray
 
 
-def batchify(x: dict, agent_list, num_actors):
+def batchify(x: dict, agent_list, num_actors, ps=True):
     x = jnp.stack([x[a] for a in agent_list])
-    return x.reshape((num_actors, -1))
+    if ps:
+        batched = x.reshape((num_actors, -1))
+    else:
+        batched = x
+    return batched
 
 
 def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
@@ -119,7 +128,10 @@ def unbatchify(x: jnp.ndarray, agent_list, num_envs, num_actors):
 def make_train(config, viz_test_env):
     env = jaxmarl.make(config["ENV_NAME"], **config["ENV_KWARGS"])
 
-    config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
+    if config['PARAMETERS_SHARING']:
+        config["NUM_ACTORS"] = env.num_agents * config["NUM_ENVS"]
+    else:
+         config["NUM_ACTORS"] = env.num_agents
     config["NUM_UPDATES"] = (
         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
@@ -149,14 +161,25 @@ def make_train(config, viz_test_env):
         # INIT NETWORK
         network = ActorCriticRNN(env.action_space(env.agents[0]).n, config=config)
         rng, _rng = jax.random.split(rng)
-        init_x = (
-            jnp.zeros(
-                (1, config["NUM_ENVS"], env.observation_space(env.agents[0]).shape)
-            ),
-            jnp.zeros((1, config["NUM_ENVS"])),
-        )
-        init_hstate = ScannedRNN.initialize_carry(config["NUM_ENVS"], config["GRU_HIDDEN_DIM"])
-        network_params = network.init(_rng, init_hstate, init_x)
+
+        if config["PARAMETERS_SHARING"]:
+            init_x = (
+                jnp.zeros(
+                    (1, config["NUM_ENVS"], env.observation_space(env.agents[0]).shape)
+                ),
+                jnp.zeros((1, config["NUM_ENVS"])),
+            )
+            init_hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ENVS"])
+            network_params = network.init(_rng, init_hstate, init_x)
+        else:
+            init_x = (
+                jnp.zeros((config["NUM_ACTORS"], 1, config["NUM_ENVS"], env.observation_space(env.agents[0]).shape)),
+                jnp.zeros((config["NUM_ACTORS"], 1, config["NUM_ENVS"]))
+            )
+            init_hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ACTORS"], config["NUM_ENVS"])
+            rngs = jax.random.split(_rng, config["NUM_ACTORS"]) # a random init for each agent
+            network_params = jax.vmap(network.init, in_axes=(0, 0, 0))(rngs, init_hstate, init_x)
+
         if config["ANNEAL_LR"]:
             tx = optax.chain(
                 optax.clip_by_global_norm(config["MAX_GRAD_NORM"]),
@@ -177,7 +200,10 @@ def make_train(config, viz_test_env):
         rng, _rng = jax.random.split(rng)
         reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
         obsv, env_state = jax.vmap(env.reset, in_axes=(0,))(reset_rng)
-        init_hstate = ScannedRNN.initialize_carry(config["NUM_ACTORS"], config["GRU_HIDDEN_DIM"])
+        if config["PARAMETERS_SHARING"]:
+            init_hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ACTORS"])
+        else:
+            init_hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ACTORS"], config["NUM_ENVS"])
 
         # TRAIN LOOP
         def _update_step(update_runner_state, unused):
@@ -189,12 +215,22 @@ def make_train(config, viz_test_env):
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
-                obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-                ac_in = (
-                    obs_batch[np.newaxis, :],
-                    last_done[np.newaxis, :],
-                )
-                hstate, pi, value = network.apply(train_state.params, hstate, ac_in)
+                if config["PARAMETERS_SHARING"]:
+                    obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
+                    ac_in = (
+                        obs_batch[np.newaxis, :],
+                        last_done[np.newaxis, :],
+                    )
+                    hstate, pi, value = network.apply(train_state.params, hstate, ac_in)
+                else:
+                    obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"], ps=False)
+                    ac_in = (
+                        obs_batch[np.newaxis, :],
+                        last_done[np.newaxis, :],
+                    )
+                    # hstate = hstate[np.newaxis, :]
+                    hstate, pi, value = jax.vmap(network.apply, in_axes=(0, 0, 1))(train_state.params, hstate, ac_in)
+
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
                 env_act = unbatchify(
@@ -208,18 +244,32 @@ def make_train(config, viz_test_env):
                 obsv, env_state, reward, done, info = jax.vmap(
                     env.step, in_axes=(0, 0, 0)
                 )(rng_step, env_state, env_act)
-                info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
-                done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
-                transition = Transition(
-                    jnp.tile(done["__all__"], env.num_agents),
-                    last_done,
-                    action.squeeze(),
-                    value.squeeze(),
-                    batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
-                    log_prob.squeeze(),
-                    obs_batch,
-                    info,
-                )
+                if config["PARAMETERS_SHARING"]:
+                    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
+                    done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
+                    transition = Transition(
+                        jnp.tile(done["__all__"], env.num_agents),
+                        last_done,
+                        action.squeeze(),
+                        value.squeeze(),
+                        batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze(),
+                        log_prob.squeeze(),
+                        obs_batch,
+                        info,
+                    )
+                else:
+                    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"],config["NUM_ENVS"])), info)
+                    done_batch = batchify(done, env.agents, config["NUM_ACTORS"], ps=False).squeeze()
+                    transition = Transition(
+                        jnp.tile(done["__all__"], (env.num_agents, 1)),
+                        last_done,
+                        action.squeeze(),
+                        value.squeeze(),
+                        batchify(reward, env.agents, config["NUM_ACTORS"], ps=False).squeeze(),
+                        log_prob.squeeze(),
+                        obs_batch,
+                        info,
+                    )
                 runner_state = (train_state, env_state, obsv, done_batch, hstate, viz_env_state, rng)
                 return runner_state, transition
 
@@ -230,13 +280,6 @@ def make_train(config, viz_test_env):
 
             # CALCULATE ADVANTAGE
             train_state, env_state, last_obs, last_done, hstate, viz_env_state, rng = runner_state
-            last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-            ac_in = (
-                last_obs_batch[np.newaxis, :],
-                last_done[np.newaxis, :],
-            )
-            _, _, last_val = network.apply(train_state.params, hstate, ac_in)
-            last_val = last_val.squeeze()
 
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -262,7 +305,24 @@ def make_train(config, viz_test_env):
                 )
                 return advantages, advantages + traj_batch.value
 
-            advantages, targets = _calculate_gae(traj_batch, last_val)
+            if config["PARAMETERS_SHARING"]:
+                last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
+                ac_in = (
+                    last_obs_batch[np.newaxis, :],
+                    last_done[np.newaxis, :],
+                )
+                _, _, last_val = network.apply(train_state.params, hstate, ac_in)
+                last_val = last_val.squeeze()
+                advantages, targets = _calculate_gae(traj_batch, last_val)
+            else:
+                last_obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"], ps=False)
+                ac_in = (
+                    last_obs_batch[np.newaxis, :],
+                    last_done[np.newaxis, :],
+                )
+                _, _, last_val = jax.vmap(network.apply, in_axes=(0, 0, 1))(train_state.params, hstate, ac_in)
+                last_val = last_val.squeeze()
+                advantages, targets = jax.vmap(_calculate_gae, in_axes=(1,0))(traj_batch, last_val)
 
             # UPDATE NETWORK
             def _update_epoch(update_state, unused):
@@ -331,11 +391,9 @@ def make_train(config, viz_test_env):
                     targets,
                     rng,
                 ) = update_state
-                rng, _rng = jax.random.split(rng)
 
-                init_hstate = jnp.reshape(
-                    init_hstate, (1, config["NUM_ACTORS"], -1)
-                )
+                rng, _rng = jax.random.split(rng)
+                init_hstate = jnp.reshape(init_hstate, (1, config["NUM_ACTORS"], -1))
                 batch = (
                     init_hstate,
                     traj_batch,
@@ -343,7 +401,6 @@ def make_train(config, viz_test_env):
                     targets.squeeze(),
                 )
                 permutation = jax.random.permutation(_rng, config["NUM_ACTORS"])
-
                 shuffled_batch = jax.tree_util.tree_map(
                     lambda x: jnp.take(x, permutation, axis=1), batch
                 )
@@ -361,9 +418,18 @@ def make_train(config, viz_test_env):
                     shuffled_batch,
                 )
 
-                train_state, total_loss = jax.lax.scan(
-                    _update_minbatch, train_state, minibatches
-                )
+                if config.get("PARAMETERS_SHARING", True):
+                    # Use `scan` over minibatches for shared parameters
+                    train_state, total_loss = jax.lax.scan(_update_minbatch, train_state, minibatches)
+                else:
+                    # Use `vmap` to parallelize `scan` over a new batch dimension
+                    train_state, total_loss = jax.vmap(
+                        lambda train_state, minibatches: jax.lax.scan(
+                            _update_minbatch, train_state, minibatches
+                        ),
+                        in_axes=(0, 0)
+                    )(train_state, minibatches)
+
                 update_state = (
                     train_state,
                     init_hstate.squeeze(),
@@ -456,12 +522,21 @@ def make_train(config, viz_test_env):
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
-                obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
-                ac_in = (
-                    obs_batch[np.newaxis, :],
-                    last_done[np.newaxis, :],
-                )
-                hstate, pi, value = network.apply(params, hstate, ac_in)
+                if config["PARAMETERS_SHARING"]:
+                    obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"])
+                    ac_in = (
+                        obs_batch[np.newaxis, :],
+                        last_done[np.newaxis, :],
+                    )
+                    hstate, pi, value = network.apply(params, hstate, ac_in)
+                else:
+                    obs_batch = batchify(last_obs, env.agents, config["NUM_ACTORS"], ps=False)
+                    ac_in = (
+                        obs_batch[np.newaxis, :],
+                        last_done[np.newaxis, :],
+                    )
+                    # hstate = hstate[np.newaxis, :]
+                    hstate, pi, value = jax.vmap(network.apply, in_axes=(0, 0, 1))(params, hstate, ac_in)
                 # here, instead of sampling from distribution, take mode
                 action = pi.mode()
                 env_act = unbatchify(
@@ -484,7 +559,10 @@ def make_train(config, viz_test_env):
                 if "quota_met" in info:
                     info["quota_met"] = info["quota_met"].reshape(-1, 1).repeat(test_env.num_agents, axis=1)
 
-                info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
+                if config["PARAMETERS_SHARING"]:
+                    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"])), info)
+                else:
+                    info = jax.tree_map(lambda x: x.reshape((config["NUM_ACTORS"]*config["NUM_ENVS"])), info)
 
                 done_batch = batchify(done, env.agents, config["NUM_ACTORS"]).squeeze()
                 reward_batch = batchify(reward, env.agents, config["NUM_ACTORS"]).squeeze()
@@ -496,8 +574,13 @@ def make_train(config, viz_test_env):
             rng, _rng = jax.random.split(rng)
             reset_rng = jax.random.split(_rng, config["NUM_ENVS"])
             init_obsv, env_state = jax.vmap(test_env.reset, in_axes=(0,))(reset_rng)
-            init_dones = jnp.zeros((config["NUM_ACTORS"]), dtype=bool)
-            hstate = ScannedRNN.initialize_carry(config["NUM_ACTORS"], config["GRU_HIDDEN_DIM"])
+            if config["PARAMETERS_SHARING"]:
+                init_dones = jnp.zeros((config["NUM_ACTORS"]), dtype=bool)
+                hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ACTORS"])
+            else:
+                init_dones = jnp.zeros((config["NUM_ACTORS"], config["NUM_ENVS"]), dtype=bool)
+                hstate = ScannedRNN.initialize_carry(config["GRU_HIDDEN_DIM"], config["NUM_ACTORS"], config["NUM_ENVS"])
+                hstate = jnp.expand_dims(hstate, 1)
             rng, _rng = jax.random.split(rng)
 
             step_state = (params, env_state, init_obsv, init_dones, hstate, _rng)
@@ -595,15 +678,26 @@ def make_train(config, viz_test_env):
         rng, _rng = jax.random.split(rng)
         greedy_ret = _get_greedy_metrics(_rng, train_state.params) # initial greedy metrics
         test_metrics, viz_env_states = greedy_ret["metrics"], greedy_ret["viz_env_states"]
-        runner_state = (
-            train_state,
-            env_state,
-            obsv,
-            jnp.zeros((config["NUM_ACTORS"]), dtype=bool),
-            init_hstate,
-            viz_env_states,
-            _rng,
-        )
+        if config["PARAMETERS_SHARING"]:
+            runner_state = (
+                train_state,
+                env_state,
+                obsv,
+                jnp.zeros((config["NUM_ACTORS"]), dtype=bool),
+                init_hstate,
+                viz_env_states,
+                _rng,
+            )
+        else:
+            runner_state = (
+                train_state,
+                env_state,
+                obsv,
+                jnp.zeros((config["NUM_ACTORS"], config["NUM_ENVS"]), dtype=bool),
+                init_hstate,
+                viz_env_states,
+                _rng,
+            )
         runner_state, metric = jax.lax.scan(
             _update_step, (runner_state, 0), None, config["NUM_UPDATES"]
         )
@@ -618,7 +712,7 @@ def main(config):
     config["NUM_STEPS"] = config["ENV_KWARGS"]["max_steps"]
 
     env_name = config["ENV_NAME"]
-    alg_name = "IPPO"
+    alg_name = f'IPPO_{"ps" if config.get("PARAMETERS_SHARING", True) else "ns"}'
 
     wandb_tags = [
         alg_name.upper(),
