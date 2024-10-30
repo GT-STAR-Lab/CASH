@@ -45,7 +45,7 @@ NUM_SEEDS: 10
 # WandB Params
 ENTITY: star-lab-gt
 PROJECT: JaxMARL
-WANDB_MODE: offline
+WANDB_MODE: online
 
 SAVE_PATH: baselines/MAPPO/checkpoints
 VISUALIZE_FINAL_POLICY: True
