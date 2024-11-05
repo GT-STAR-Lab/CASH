@@ -334,8 +334,6 @@ def make_train(config, viz_test_env):
                     total_loss, grads = jax.vmap(grad_fn)(
                         train_state.params, init_hstate, traj_batch, advantages, targets
                     )
-                    print(total_loss)
-                    print(grads)
                     train_state = train_state.apply_gradients(grads=grads)
                     return train_state, total_loss
 
@@ -377,7 +375,6 @@ def make_train(config, viz_test_env):
                     batch,
                 )
 
-                print(minibatches)
                 train_state, total_loss = jax.lax.scan(
                     _update_minbatch, train_state, minibatches
                 )
@@ -481,12 +478,14 @@ def make_train(config, viz_test_env):
 
                 # vmap forward pass for agent networks across params
                 hstate, pi, value = jax.vmap(network.apply, in_axes=(0, 0, 1))(params, hstate, ac_in)
+                # print(pi.probs.shape)
 
                 # here, instead of sampling from distribution, take mode
                 action = pi.mode()
                 env_act = unbatchify(
                     action, env.agents, config["NUM_ENVS"], env.num_agents
                 )
+               #  print(env_act)
 
                 # STEP ENV
                 rng, _rng = jax.random.split(rng)
@@ -525,10 +524,7 @@ def make_train(config, viz_test_env):
                 _greedy_env_step, step_state, None, config["NUM_STEPS"]
             )
 
-            # snd_obs = obs.reshape(config['ENV_KWARGS']['max_steps'], len(env.agents), config["NUM_ENVS"], -1)
-            # snd_hstate = hstate.reshape(config['ENV_KWARGS']['max_steps'], len(env.agents), config["NUM_ENVS"], -1)
-            # snd_value = snd(rollouts=snd_obs, hiddens=snd_hstate, dim_c=test_env.num_agents*2, params=params, alg='ippo', agent=network)
-            snd_value = 0
+            snd_value = snd(rollouts=obs, hiddens=hstate, dim_c=test_env.num_agents*2, params=params, alg='ippo', agent=network)
 
             # define fire_env_metrics (should be attached to env, but is not)
             def fire_env_metrics(final_env_state):
@@ -684,7 +680,6 @@ def main(config):
         if config["VISUALIZE_FINAL_POLICY"]:
 
             # TODO: I have no idea what this object is from
-            # print(outs['runner_state'][1])
             viz_env_states = outs['runner_state'][0][-2]
 
             # build a list of states manually from vectorized seq returned by
