@@ -1,24 +1,53 @@
-"ENV_NAME": "MPE_simple_spread_v3"
-"LR": 5e-4
-"NUM_ENVS": 16
-"NUM_STEPS": 128
-"FC_DIM_SIZE": 128
-"GRU_HIDDEN_DIM": 128
-"TOTAL_TIMESTEPS": 1e7
-"UPDATE_EPOCHS": 4
-"NUM_MINIBATCHES": 2
-"GAMMA": 0.99
-"GAE_LAMBDA": 0.95
-"CLIP_EPS": 0.3
-"SCALE_CLIP_EPS": False
-"ENT_COEF": 0.01
-"VF_COEF": 1.0
-"MAX_GRAD_NORM": 0.5
-"ACTIVATION": "tanh"
-"ANNEAL_LR": True
-"SEED": 30
+LR: 5e-4
+ANNEAL_LR: True
+NUM_ENVS: 16
+# NUM_STEPS: 128 # defined below by ENV_KWARGS.max_steps
+TOTAL_TIMESTEPS: 10e6
+FC_DIM_SIZE: 128
+GRU_HIDDEN_DIM: 128
+UPDATE_EPOCHS: 4
+NUM_MINIBATCHES: 2
+GAMMA: 0.99
+GAE_LAMBDA: 0.95
+CLIP_EPS: 0.3
+SCALE_CLIP_EPS: False
+ENT_COEF: 0.01
+VF_COEF: 1.0
+MAX_GRAD_NORM: 0.5
+ACTIVATION: "tanh"
+
+ENV_NAME: MPE_simple_fire
+ENV_KWARGS:
+  max_steps: 50 # 25
+  ippo_flag: True
+
+  fire_rad_range: [0.2, 0.3]
+
+  # reward shaping
+  fire_out_reward: 0.5
+  uncovered_penalty_factor: 1
+  pos_shaping_factor: 0.01
+
+  # capabilities implemented in MPE_simple_fire: [fire_fight_cap, accel]
+  capability_aware: True # T/F
+  num_capabilities: 2
+  num_agents: 3
+  num_landmarks: 2
+
+  # NOTE: if these lists are longer than num_agents, env will sample num_agents randomly from them each train iter
+  # NOTE: hijacking agent_rads = firefighting capability
+  agent_rads: [0.3, 0.2, 0.1]
+  agent_accels: [1, 2, 3]
+
+SEED: 76
+NUM_SEEDS: 10
 
 # WandB Params
-"ENTITY": ""
-"PROJECT": ""
-"WANDB_MODE" : "disabled"
+ENTITY: star-lab-gt
+PROJECT: JaxMARL
+WANDB_MODE: online
+
+SAVE_PATH: baselines/MAPPO/checkpoints
+VISUALIZE_FINAL_POLICY: True
+# number of seeds/envs to visualize
+VIZ_NUM_ENVS: 3

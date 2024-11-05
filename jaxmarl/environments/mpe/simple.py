@@ -1,4 +1,4 @@
-""" 
+"""
 Base class for MPE PettingZoo envs.
 
 TODO: viz for communication env, e.g. crypto
@@ -52,6 +52,7 @@ class SimpleMPE(MultiAgentEnv):
     ):
         self.test_env_flag = kwargs["test_env_flag"] if "test_env_flag" in kwargs else False
         self.test_capabilities = kwargs["test_capabilities"] if "test_capabilities" in kwargs else None
+        self.ippo_flag = kwargs["ippo_flag"] if "ippo_flag" in kwargs else None
 
         # Agent and entity constants
         self.num_agents = num_agents
@@ -136,7 +137,7 @@ class SimpleMPE(MultiAgentEnv):
             self.agent_accels = kwargs["agent_accels"]
             # assert (len(self.agent_accels) >= self.num_agents), f"Not enough agent_accels, {len(self.agent_accels)} < {self.num_agents}"
             self.agent_accels = jnp.array(self.agent_accels)
-        
+
         if "agent_capacities" in kwargs:
             self.agent_capacities = kwargs["agent_capacities"]
             self.agent_capacities = jnp.array(self.agent_capacities)
@@ -297,7 +298,7 @@ class SimpleMPE(MultiAgentEnv):
         # if self.test_env_flag and self.test_capabilities is not None:
         #     team_capabilities = jnp.asarray(self.test_capabilities)
 
-        
+
         agent_rads = self.agent_rads[selected_agents]
         agent_accels = self.agent_accels[selected_agents]
         agent_capacities = self.agent_capacities[selected_agents] if self.agent_capacities else np.zeros((self.num_agents, 2))
@@ -521,7 +522,7 @@ class SimpleMPE(MultiAgentEnv):
         m = x < 1.0
         mr = (x - 0.9) * 10
         br = jnp.min(jnp.array([jnp.exp(2 * x - 2), 10]))
-        return jax.lax.select(m, mr, br) * ~w   
+        return jax.lax.select(m, mr, br) * ~w
 
 
 if __name__ == "__main__":
