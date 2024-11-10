@@ -19,6 +19,20 @@ def homogeneous_pass_qmix(params, hidden_state, obs, dones, agent=None):
 
     return q_vals
 
+def homogeneous_pass_qmix_ns(params, hidden_state, obs, dones, agent=None):
+    original_shape = obs.shape
+    # reshape and transpose observations for vmap
+    obs = jnp.transpose(obs.reshape(1, obs.shape[0], obs.shape[1], obs.shape[2]), (2, 0, 1, 3))
+    dones = jnp.transpose(dones.reshape(1, dones.shape[0], dones.shape[1]), (2, 0, 1))
+    hidden_state = jnp.transpose(hidden_state, (1, 0, 2))
+
+    batched_input = (obs, dones)
+    hidden_state, q_vals = jax.vmap(agent.apply, in_axes=0)(params, hidden_state, batched_input)
+    q_vals = jnp.transpose(q_vals, (1, 2, 0, 3))    # transpose back
+    q_vals = q_vals.squeeze(0)
+
+    return q_vals
+
 def homogeneous_pass_mappo(params, hidden_state, obs, dones, agent=None):
     """
     Forward pass for mappo, copied from mappo_rnn_mpe.py
@@ -50,8 +64,8 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
     Calculate system neural diversity metric
     """
 
-    if alg == 'qmix':
-        policy = homogeneous_pass_qmix
+    if 'qmix' in alg:
+        policy = homogeneous_pass_qmix if alg == 'qmix' else homogeneous_pass_qmix_ns
         agents, agents_obs = zip(*rollouts.items())
         rollouts = jnp.stack(agents_obs[1:]) # [n_agents, timesteps, batch_dim, obs_dim]
         original_shape = rollouts.shape
@@ -111,7 +125,7 @@ def snd(rollouts, hiddens, dim_c, params, alg='qmix', agent=None):
         corresponding observations, add to flatten into a vector containing the added distances
         between i and each other agent 
         """
-        if alg == 'qmix':
+        if 'qmix' in alg:
             qvals_i = get_policy_outputs(agent_i) # [timesteps, batch_size, n_agents, action_dim]
 
             # convert qvals to categorical distributions

@@ -57,26 +57,26 @@ class MixingNetwork(nn.Module):
 
     @nn.compact
     def __call__(self, q_vals, states):
-        
+
         n_agents, time_steps, batch_size = q_vals.shape
         q_vals = jnp.transpose(q_vals, (1, 2, 0)) # (time_steps, batch_size, n_agents)
-        
+
         # hypernetwork
         w_1 = HyperNetwork(hidden_dim=self.hypernet_hidden_dim, output_dim=self.embedding_dim*n_agents, init_scale=self.init_scale)(states)
         b_1 = nn.Dense(self.embedding_dim, kernel_init=orthogonal(self.init_scale), bias_init=constant(0.))(states)
         w_2 = HyperNetwork(hidden_dim=self.hypernet_hidden_dim, output_dim=self.embedding_dim, init_scale=self.init_scale)(states)
         b_2 = HyperNetwork(hidden_dim=self.embedding_dim, output_dim=1, init_scale=self.init_scale)(states)
-        
+
         # monotonicity and reshaping
         w_1 = jnp.abs(w_1.reshape(time_steps, batch_size, n_agents, self.embedding_dim))
         b_1 = b_1.reshape(time_steps, batch_size, 1, self.embedding_dim)
         w_2 = jnp.abs(w_2.reshape(time_steps, batch_size, self.embedding_dim, 1))
         b_2 = b_2.reshape(time_steps, batch_size, 1, 1)
-    
+
         # mix
         hidden = nn.elu(jnp.matmul(q_vals[:, :, None, :], w_1) + b_1)
         q_tot  = jnp.matmul(hidden, w_2) + b_2
-        
+
         return q_tot.squeeze() # (time_steps, batch_size)
 
 
@@ -88,23 +88,23 @@ class EpsilonGreedy:
         self.end_e    = end_e
         self.duration = duration
         self.slope    = (end_e - start_e) / duration
-        
+
     @partial(jax.jit, static_argnums=0)
     def get_epsilon(self, t: int):
         e = self.slope*t + self.start_e
         return jnp.clip(e, self.end_e)
-    
+
     @partial(jax.jit, static_argnums=0)
     def choose_actions(self, q_vals: dict, t: int, rng: chex.PRNGKey):
-        
+
         def explore(q, eps, key):
             key_a, key_e   = jax.random.split(key, 2) # a key for sampling random actions and one for picking
-            greedy_actions = jnp.argmax(q, axis=-1) # get the greedy actions 
+            greedy_actions = jnp.argmax(q, axis=-1) # get the greedy actions
             random_actions = jax.random.randint(key_a, shape=greedy_actions.shape, minval=0, maxval=q.shape[-1]) # sample random actions
             pick_random    = jax.random.uniform(key_e, greedy_actions.shape)<eps # pick which actions should be random
             chosed_actions = jnp.where(pick_random, random_actions, greedy_actions)
             return chosed_actions
-        
+
         eps = self.get_epsilon(t)
         keys = dict(zip(q_vals.keys(), jax.random.split(rng, len(q_vals)))) # get a key for each agent
         chosen_actions = jax.tree.map(lambda q, k: explore(q, eps, k), q_vals, keys)
@@ -128,7 +128,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
         config["TOTAL_TIMESTEPS"] // config["NUM_STEPS"] // config["NUM_ENVS"]
     )
 
-    
+
     def train(rng):
 
         # INIT ENV
@@ -166,7 +166,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
             sample_sequence_length=1,
             period=1,
         )
-        buffer_state = buffer.init(sample_traj_unbatched) 
+        buffer_state = buffer.init(sample_traj_unbatched)
 
         # INIT NETWORK
         # init agent
@@ -176,7 +176,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
             else:
                 exit("HyperMLP deprecated currently!") # TODO: to fix, pass in AGENT_HYPERNET_KWARGS
                 # agent = AgentHyperMLP(action_dim=wrapped_env.max_action_space, hidden_dim=config["AGENT_HIDDEN_DIM"], init_scale=config['AGENT_INIT_SCALE'], hypernet_hidden_dim=config["AGENT_HYPERNET_KWARGS"]["HIDDEN_DIM"], hypernet_init_scale=config["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"], dim_capabilities=log_train_env.dim_capabilities)
-        else: 
+        else:
             if not config["AGENT_HYPERAWARE"]:
                 agent = AgentRNN(action_dim=wrapped_env.max_action_space, hidden_dim=config["AGENT_HIDDEN_DIM"], init_scale=config['AGENT_INIT_SCALE'])
             else:
@@ -290,7 +290,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
                 dones_ = jax.tree.map(lambda x: x[np.newaxis, :], last_dones)
                 # get the q_values from the agent netwoek
                 hstate, q_vals = homogeneous_pass(params, hstate, obs_, dones_)
-                # remove the dummy time_step dimension and index qs by the valid actions of each agent 
+                # remove the dummy time_step dimension and index qs by the valid actions of each agent
                 valid_q_vals = jax.tree_util.tree_map(lambda q, valid_idx: q.squeeze(0)[..., valid_idx], q_vals, wrapped_env.valid_actions)
                 # explore with epsilon greedy_exploration
                 actions = explorer.choose_actions(valid_q_vals, t, key_a)
@@ -315,7 +315,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
                 env_state,
                 init_obs,
                 init_dones,
-                hstate, 
+                hstate,
                 _rng,
                 time_state['timesteps'] # t is needed to compute epsilon
             )
@@ -360,12 +360,12 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
 
                 # compute q_tot with the mixer network
                 chosen_action_qvals_mix = mixer.apply(
-                    params['mixer'], 
+                    params['mixer'],
                     jnp.stack(list(chosen_action_qvals.values())),
                     learn_traj.obs['__all__'][:-1] # avoid last timestep
                 )
                 target_max_qvals_mix = mixer.apply(
-                    target_network_params['mixer'], 
+                    target_network_params['mixer'],
                     jnp.stack(list(target_max_qvals.values())),
                     learn_traj.obs['__all__'][1:] # avoid first timestep
                 )
@@ -399,7 +399,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
                         + config['GAMMA']*(1-learn_traj.dones['__all__'][:-1])*target_max_qvals_mix
                     )
                     loss = jnp.mean((chosen_action_qvals_mix - jax.lax.stop_gradient(targets))**2)
-                
+
                 return loss
 
 
@@ -537,15 +537,15 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
                 env_state,
                 init_obs,
                 init_dones,
-                hstate, 
+                hstate,
                 _rng,
             )
             step_state, (rewards, dones, infos, viz_env_states, obs, hstate) = jax.lax.scan(
                 _greedy_env_step, step_state, None, config["NUM_STEPS"]
             )
 
-            # get snd, NOTE: dim_c multiplier is currently hardcoded since it works for both fire and transport 
-            snd_value = snd(rollouts=obs, hiddens=hstate, dim_c=len(test_env.training_agents)*2, params=params, alg='qmix', agent=agent)
+            # get snd, NOTE: dim_c multiplier is currently hardcoded since it works for both fire and transport
+            snd_value = snd(rollouts=obs, hiddens=hstate, dim_c=len(test_env.training_agents)*2, params=params, alg='qmix' if config["PARAMETERS_SHARING"] else 'qmix_ns', agent=agent)
 
             def fire_env_metrics(final_env_state):
                 """
@@ -635,7 +635,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
                     print(f"Timestep: {timestep}, return: {val}")
                 jax.debug.callback(callback, time_state['timesteps']*config['NUM_ENVS'], first_returns['__all__'].mean())
             return {"metrics": metrics, "viz_env_states": viz_env_states}
-        
+
         time_state = {
             'timesteps':jnp.array(0),
             'updates':  jnp.array(0)
@@ -662,7 +662,7 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
             _update_step, runner_state, None, config["NUM_UPDATES"]
         )
         return {'runner_state':runner_state, 'metrics':metrics}
-    
+
     return train
 
 @hydra.main(version_base=None, config_path="./config", config_name="config")
@@ -673,7 +673,7 @@ def main(config):
 
     env_name = config["env"]["ENV_NAME"]
     alg_name = f'qmix_{"ps" if config["alg"].get("PARAMETERS_SHARING", True) else "ns"}'
-    
+
     # smac init neeeds a scenario
     if 'smax' in env_name.lower():
         config['env']['ENV_KWARGS']['scenario'] = map_name_to_scenario(config['env']['MAP_NAME'])
@@ -688,7 +688,7 @@ def main(config):
         log_test_env = LogWrapper(viz_test_env)
 
     config["alg"]["NUM_STEPS"] = config["alg"].get("NUM_STEPS", train_env.max_steps) # default steps defined by the env
-    
+
     hyper_tag = "hyper" if config["alg"]["AGENT_HYPERAWARE"] else "normal"
     recurrent_tag = "RNN" if config["alg"]["AGENT_RECURRENT"] else "MLP"
     aware_tag = "aware" if config["env"]["ENV_KWARGS"]["capability_aware"] else "unaware"
@@ -714,12 +714,12 @@ def main(config):
         config=config,
         mode=config["WANDB_MODE"],
     )
-    
+
     rng = jax.random.PRNGKey(config["SEED"])
     rngs = jax.random.split(rng, config["NUM_SEEDS"])
     train_vjit = jax.jit(jax.vmap(make_train(config["alg"], log_train_env, log_test_env, viz_test_env, env_name=config["env"]["ENV_NAME"])))
     outs = jax.block_until_ready(train_vjit(rngs))
-    
+
     # save params
     if config['SAVE_PATH'] is not None:
 
@@ -779,4 +779,4 @@ def main(config):
 
 if __name__ == "__main__":
     main()
-    
+

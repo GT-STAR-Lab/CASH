@@ -45,7 +45,7 @@ class SimpleTransportMPE(SimpleMPE):
         }
 
         # overriden in reset to reflect max capability
-        self.colour = [(169, 169, 169)] * num_agents + [(0, 0, 255), (0, 255, 0), (128,0,128)] 
+        self.colour = [(169, 169, 169)] * num_agents + [(0, 0, 255), (0, 255, 0), (128,0,128)]
 
         # reward shaping terms
         self.concrete_pickup_reward = kwargs.get("concrete_pickup_reward", 0.25)
@@ -72,7 +72,7 @@ class SimpleTransportMPE(SimpleMPE):
             collide=collide,
             **kwargs,
         )
-    
+
     @partial(jax.jit, static_argnums=[0])
     def step_env(self, key: chex.PRNGKey, state: State, actions: dict):
         """
@@ -120,7 +120,7 @@ class SimpleTransportMPE(SimpleMPE):
         def io_callback(x, i):
             if x[0][0].item() == 1.0:
                 print(f"payload {i}: {x[0][0].item()}")
-        
+
         able_to_load = jnp.bitwise_and(state.payload[:, 0] == 0., state.payload[:, 1] == 0.)
         # update payload for agents on concrete depot
         payload_concrete = jnp.where(jnp.bitwise_and(mask[:, 0], able_to_load), state.capacity[:, 0], state.payload[:, 0])
@@ -198,7 +198,7 @@ class SimpleTransportMPE(SimpleMPE):
             other_cap = state.capacity
             ego_cap = other_cap[aidx, :]
             other_cap = jnp.roll(other_cap, shift=self.num_agents - aidx - 1, axis=0)[:self.num_agents-1, :]
-            
+
             # mask out capabilities for non-capability-aware baselines
             if not self.capability_aware:
                 other_cap = jnp.full(other_cap.shape, MASK_VAL)
@@ -210,7 +210,7 @@ class SimpleTransportMPE(SimpleMPE):
 
             # current payload
             payload = state.payload[aidx, :]
-            
+
             obs = jnp.concatenate([
                 ego_pos.flatten(),  # 2
                 rel_other_pos.flatten(),  # N-1, 2
@@ -227,7 +227,7 @@ class SimpleTransportMPE(SimpleMPE):
 
         obs = {a: _obs(i) for i, a in enumerate(self.agents)}
         return obs
-    
+
     def rewards(self, state: State) -> Dict[str, float]:
         """
         Reward agents according to objective of maximizing delivered materials.
@@ -243,7 +243,7 @@ class SimpleTransportMPE(SimpleMPE):
             able_to_load = jnp.bitwise_and(state.payload[agent_i][0] == 0, state.payload[agent_i][1] == 0)
             able_to_load = jnp.bitwise_and(able_to_load, state.capacity[agent_i][0] > 0)
             return jnp.bitwise_and(dist <= state.rad[-3], able_to_load)
-        
+
         def _load_lumber_rew(agent_i):
             """
             Reward agent for loading lumber if payload is empty.
@@ -295,7 +295,7 @@ class SimpleTransportMPE(SimpleMPE):
         rew = {a: rew[a] + quota_rew for a in rew}
 
         return rew
-    
+
     def reset(self, key: chex.PRNGKey) -> Tuple[chex.Array, State]:
         """
         Override reset in simple.py to fix the location of the depots and construction site.
@@ -319,20 +319,24 @@ class SimpleTransportMPE(SimpleMPE):
         agent_rads = self.agent_rads
         agent_accels = self.agent_accels
 
-        # randomly sample a team from the capacity team pool
-        selected_team = jax.random.choice(key_a, self.agent_capacities.shape[0], shape=(1,))
-        agent_capacities = self.agent_capacities[selected_team].squeeze()
-
-        # if a test distribution is provided and this is a test_env, override capacities
-        # NOTE: also add other capabilities here?
-        if self.test_env_flag and self.test_team_capacities is not None:
-            selected_team = jax.random.choice(key_t, self.test_team_capacities.shape[0], shape=(1,))
-            agent_capacities = self.test_team_capacities[selected_team].squeeze()
+        if self.independent_agents:
+            # if independent policies do not sample teams and capabilities, keep constant
+            # NOTE: assumes that agent_capacities is n_agent length
+            agent_capacities = self.agent_capacities
+        else:
+            # randomly sample a team from the capacity team pool
+            selected_team = jax.random.choice(key_a, self.agent_capacities.shape[0], shape=(1,))
+            agent_capacities = self.agent_capacities[selected_team].squeeze()
+            # if a test distribution is provided and this is a test_env, override capacities
+            # NOTE: also add other capabilities here?
+            if self.test_env_flag and self.test_team_capacities is not None:
+                selected_team = jax.random.choice(key_t, self.test_team_capacities.shape[0], shape=(1,))
+                agent_capacities = self.test_team_capacities[selected_team].squeeze()
 
         # initialize with empty payload or a payload corresponding to capacity
         # payload = jnp.where(
-        #     jax.random.uniform(key_l, (self.num_agents, 1)) < 0.5, 
-        #     0, 
+        #     jax.random.uniform(key_l, (self.num_agents, 1)) < 0.5,
+        #     0,
         #     jnp.take_along_axis(agent_capacities, jax.random.randint(key_l, (self.num_agents, 1), minval=0, maxval=2), axis=1)
         # )
 
@@ -374,7 +378,7 @@ def unit_test():
     env = SimpleTransportMPE(
         num_agents=3,
         action_type=DISCRETE_ACT,
-        capability_aware=True, 
+        capability_aware=True,
         num_capabilities=2,
         **env_kwargs,
     )
@@ -448,7 +452,7 @@ def generate_teams(seed):
     # for i, team in enumerate(teams):
     #     # Convert the team to a sorted tuple
     #     sorted_team = tuple(sorted(tuple(agent) for agent in team))
-        
+
     #     # Track occurrences of each team
     #     if sorted_team in team_occurrences:
     #         team_occurrences[sorted_team].append(team)
