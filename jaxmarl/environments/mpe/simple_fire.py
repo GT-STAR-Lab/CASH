@@ -30,7 +30,7 @@ class SimpleFireMPE(SimpleMPE):
         fire_pos_dim = num_landmarks * 2
         fire_rad_dim = num_landmarks
         observation_spaces = {
-            i:Box(-jnp.inf, jnp.inf, (pos_dim + vel_dim + self.dim_capabilities + fire_pos_dim + fire_rad_dim)) 
+            i:Box(-jnp.inf, jnp.inf, (pos_dim + vel_dim + self.dim_capabilities + fire_pos_dim + fire_rad_dim))
             for i in agents
         }
 
@@ -40,7 +40,7 @@ class SimpleFireMPE(SimpleMPE):
         # env specific parameters
         self.test_teams = jnp.array(kwargs["test_teams"]) if "test_teams" in kwargs else None
         self.fire_rad_range = kwargs["fire_rad_range"] if "fire_rad_range" in kwargs else [0.2, 0.3]
-        
+
         # reward shaping
         self.fire_out_reward = kwargs["fire_out_reward"] if "fire_out_reward" in kwargs else 1
         self.uncovered_penalty_factor = kwargs["uncovered_penalty_factor"] if "uncovered_penalty_factor" in kwargs else 2
@@ -207,7 +207,7 @@ class SimpleFireMPE(SimpleMPE):
 
             # if new fire spawn is valid, add it to the fire list, and incr the fire index
             new_fires = jax.lax.cond(
-                new_fire_valid, 
+                new_fire_valid,
                 lambda: new_fire_added, # T
                 lambda: existing_fires, # F
             )
@@ -240,18 +240,23 @@ class SimpleFireMPE(SimpleMPE):
             ]
         )
 
-        # randomly sample N_agents' capabilities from the possible agent pool (hence w/out replacement)
-        selected_agents = jax.random.choice(key_c, self.num_agents, shape=(self.num_agents,), replace=False)
-        agent_rads = self.agent_rads[selected_agents]
-        agent_accels = self.agent_accels[selected_agents]
-
-        # unless a test distribution is provided and this is a test_env
-        if self.test_env_flag and self.test_teams is not None:
-            # pick one of the test teams at random
-            selected_team = jax.random.choice(key_tt, self.test_teams.shape[0], shape=(1,))
-            test_team = self.test_teams[selected_team].squeeze()
-            agent_rads = test_team[0::2]
-            agent_accels = test_team[1::2]
+        if self.independent_agents:
+            # if independent policies do not sample teams and capabilities, keep constant
+            # NOTE: assumes that agent_rad and agent_accels are n_agent length
+            agent_rads = self.agent_rads
+            agent_accels = self.agent_accels
+        else:
+            # randomly sample N_agents' capabilities from the possible agent pool (hence w/out replacement)
+            selected_agents = jax.random.choice(key_c, self.num_agents, shape=(self.num_agents,), replace=False)
+            agent_rads = self.agent_rads[selected_agents]
+            agent_accels = self.agent_accels[selected_agents]
+            # unless a test distribution is provided and this is a test_env
+            if self.test_env_flag and self.test_teams is not None:
+                # pick one of the test teams at random
+                selected_team = jax.random.choice(key_tt, self.test_teams.shape[0], shape=(1,))
+                test_team = self.test_teams[selected_team].squeeze()
+                agent_rads = test_team[0::2]
+                agent_accels = test_team[1::2]
 
         state = State(
             p_pos=p_pos,
