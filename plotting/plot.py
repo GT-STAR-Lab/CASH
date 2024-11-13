@@ -32,6 +32,7 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         hyperaware = run.config.get("alg")["AGENT_HYPERAWARE"]
         cap_aware = run.config.get("env")["ENV_KWARGS"]["capability_aware"]
         init_scale = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"]
+        use_ln = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["USE_LAYER_NORM"]
 
         # MAPPO
         # hyperaware = run.config.get("AGENT_HYPERAWARE")
@@ -57,6 +58,7 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         run_data['tags'] = ', '.join(run.tags)
         run_data['hyperaware'] = hyperaware
         run_data['cap_aware'] = cap_aware
+        run_data['use_ln'] = use_ln
         run_data['agent_param_count'] = agent_param_count
 
         # for DAgger I didn't log TS, add that (hardcoded based on manual math...)
@@ -104,8 +106,12 @@ def get_from_wandb():
     # fire_metrics = ['policy/updates', 'policy/returns', 'policy/fire_success_rate', 'policy/snd', 'policy/pct_fires_put_out']
     # agent_param_count_metric = 'policy/agent_param_count'
 
-    tags = ['final-dagger-hmt']
-    dagger_hmt_metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
+    # tags = ['final-dagger-hmt']
+    # dagger_hmt_metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
+    # agent_param_count_metric = 'policy/agent_param_count'
+
+    tags = ['final-dagger-hmt-ln']
+    dagger_hmt_metrics = ['policy/updates', 'policy/returns']
     agent_param_count_metric = 'policy/agent_param_count'
 
     df = fetch_wandb_data(project_name, tags, dagger_hmt_metrics, agent_param_count_metric)
@@ -197,6 +203,7 @@ def plot_metrics(df, y_label, y_column, title, mean_window, std_window, downsamp
         'CASH': base_palette[2],
         'RNN-EXP': base_palette[0],
         'RNN-IMP': base_palette[1],
+        'CASH w/o LN': base_palette[3],
     }
     
     # Plot each baseline separately
@@ -217,11 +224,11 @@ def plot_metrics(df, y_label, y_column, title, mean_window, std_window, downsamp
     plt.xlabel('Timestep')
     plt.ylabel(y_label)
     plt.title(title)
-    plt.legend(loc='best', fontsize=18)
+    # plt.legend(loc='best')
     plt.tight_layout(pad=0.5)
 
     # plt.show()
-    plt.savefig(f'{save_folder}/{title}-{y_label}.png'.lower().replace(' ', '-'))
+    plt.savefig(f"{save_folder}/{title.replace('/', '')}-{y_label}.png".lower().replace(' ', '-'))
 
 def plot_from_saved():
     """
@@ -248,11 +255,11 @@ def plot_from_saved():
     # translate baseline names
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
     # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
 
     # qmix hmt
     filename = "final-qmix-hmt.pkl"
@@ -265,11 +272,11 @@ def plot_from_saved():
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
 
     # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
 
     # mappo Fire
     filename = "final-mappo-fire.pkl"
@@ -281,11 +288,11 @@ def plot_from_saved():
     # translate baseline names
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
     # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
 
     # mappo HMT
     filename = "final-mappo-hmt.pkl"
@@ -298,11 +305,11 @@ def plot_from_saved():
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
 
     # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
 
 
     # DAGGER FIRE
@@ -316,10 +323,10 @@ def plot_from_saved():
     # translate baseline names
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
     # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='SND', y_column='policy/snd', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Success Rate', y_column='policy/fire_success_rate', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='policy/pct_fires_put_out', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Success Rate', y_column='policy/fire_success_rate', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='policy/pct_fires_put_out', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
 
     # dagger HMT
     filename = "final-dagger-hmt.pkl"
@@ -332,17 +339,17 @@ def plot_from_saved():
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
 
     # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='SND', y_column='policy/snd', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Success Rate', y_column='policy/quota_met', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Makespan', y_column='policy/makespan', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Success Rate', y_column='policy/quota_met', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Makespan', y_column='policy/makespan', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
 
 
 def plot_parameter_counts(param_dict, title):
     """
     Creates a horizontal bar chart showing parameter counts for different architectures
     """
-    plt.figure(figsize=(4, 3))
+    plt.figure(figsize=(4, 1))
     
     # Data
     baselines = list(param_dict.keys())
@@ -362,35 +369,39 @@ def plot_parameter_counts(param_dict, title):
     bars = plt.barh(y_pos, params, color=colors)
     
     # Customize the plot
-    plt.xlabel('Learnable Parameters')
-    plt.ylabel('Architecture')
+    # plt.xlabel('Learnable Parameters')
+    # plt.ylabel('Architecture')
     plt.title(title)
     
     # Format x-axis to use scientific notation
-    plt.ticklabel_format(axis='x', style='sci', scilimits=(4,4))
+    plt.ticklabel_format(axis='x', style='sci', scilimits=(0,0))
     # Or alternatively, divide by 10000 manually:
     # plt.xticks(plt.xticks()[0], [f'{x/1e4:.1f}' for x in plt.xticks()[0]])
     
     # Add value labels inside the bars, aligned to the right end
-    for i, bar in enumerate(bars):
-        width = bar.get_width()
-        plt.text(width * 0.95,  # Position at 95% of bar width
-                bar.get_y() + bar.get_height()/2,
-                f'{params[i]:,}',
-                ha='right',  # Right-align the text
-                va='center',
-                fontsize=10,
-                color='white')  # Make text white for better visibility
+    # for i, bar in enumerate(bars):
+    #     width = bar.get_width()
+    #     plt.text(width * 0.95,  # Position at 95% of bar width
+    #             bar.get_y() + bar.get_height()/2,
+    #             f'{baselines[i]:}',
+    #             ha='right',  # Right-align the text
+    #             va='center',
+    #             fontsize=10,
+    #             color='black')
     
-    plt.yticks(y_pos, baselines)
+    # plt.yticks(y_pos, baselines)
+    plt.gca().yaxis.set_visible(False)
+
     # plt.grid(axis='x', linestyle='--', alpha=0.2)
-    plt.tight_layout(pad=0.5)
+    plt.tight_layout(pad=0.2)
+
     # plt.show()
     plt.savefig(f'{title}-param-ct.png'.lower().replace('/', ' ').replace(' ', '-'))
 
 
 if __name__ == "__main__":
     # get_from_wandb()
+    # exit(0)
     # plot_from_saved()
 
     param_counts = {
@@ -434,3 +445,43 @@ if __name__ == "__main__":
         'RNN-IMP': 100818949
     }
     plot_parameter_counts(param_counts, 'DAgger / Transport')
+
+    """
+    # for last min LN ablation
+    # dagger fire
+    filename = "final-dagger-fire-ln.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+
+    # dagger hmt
+    filename = "final-dagger-hmt-ln.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    # HMT
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+    """
