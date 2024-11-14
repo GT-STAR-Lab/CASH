@@ -29,15 +29,16 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         print(run.config)
 
         # QMIX/DAgger
-        hyperaware = run.config.get("alg")["AGENT_HYPERAWARE"]
-        cap_aware = run.config.get("env")["ENV_KWARGS"]["capability_aware"]
-        init_scale = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"]
-        use_ln = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["USE_LAYER_NORM"]
+        # hyperaware = run.config.get("alg")["AGENT_HYPERAWARE"]
+        # cap_aware = run.config.get("env")["ENV_KWARGS"]["capability_aware"]
+        # init_scale = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"]
+        # use_ln = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["USE_LAYER_NORM"]
 
         # MAPPO
-        # hyperaware = run.config.get("AGENT_HYPERAWARE")
-        # cap_aware = run.config.get("ENV_KWARGS")["capability_aware"]
-        # init_scale = run.config.get("AGENT_HYPERNET_KWARGS")["INIT_SCALE"]
+        hyperaware = run.config.get("AGENT_HYPERAWARE")
+        cap_aware = run.config.get("ENV_KWARGS")["capability_aware"]
+        init_scale = run.config.get("AGENT_HYPERNET_KWARGS")["INIT_SCALE"]
+        use_ln = run.config.get("AGENT_HYPERNET_KWARGS")["USE_LAYER_NORM"]
 
         # drop the one CASH run with init_scale = 0.5!
         if (hyperaware and cap_aware) and init_scale != 0.2:
@@ -62,7 +63,7 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         run_data['agent_param_count'] = agent_param_count
 
         # for DAgger I didn't log TS, add that (hardcoded based on manual math...)
-        run_data['timestep'] = 10 * run_data['policy/updates']
+        # run_data['timestep'] = 10 * run_data['policy/updates']
 
         print(run_data.head())
 
@@ -110,12 +111,28 @@ def get_from_wandb():
     # dagger_hmt_metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
     # agent_param_count_metric = 'policy/agent_param_count'
 
-    tags = ['final-dagger-hmt-ln']
-    dagger_hmt_metrics = ['policy/updates', 'policy/returns']
-    agent_param_count_metric = 'policy/agent_param_count'
+    # tags = ['final-dagger-hmt-ln']
+    # dagger_hmt_metrics = ['policy/updates', 'policy/returns']
+    # agent_param_count_metric = 'policy/agent_param_count'
 
-    df = fetch_wandb_data(project_name, tags, dagger_hmt_metrics, agent_param_count_metric)
-    filename = f"{tags[0]}.pkl"
+    # tags = ['ln-ablation-qmix-fire']
+    # fire_metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
+    # agent_param_count_metric = 'agent_param_count'
+
+    # tags = ['ln-ablation-qmix-transport']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    # agent_param_count_metric = 'agent_param_count'
+
+    # tags = ['ln-ablation-mappo-fire']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
+    # agent_param_count_metric = 'actor_param_count'
+
+    tags = ['ln-ablation-mappo-transport']
+    metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    agent_param_count_metric = 'actor_param_count'
+
+    df = fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric)
+    filename = f"{tags[0]}.pkl" 
     save_dataframe(df, filename)
 
     print("saved")
@@ -344,7 +361,6 @@ def plot_from_saved():
     plot_metrics(df, y_label='Success Rate', y_column='policy/quota_met', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
     plot_metrics(df, y_label='Makespan', y_column='policy/makespan', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
 
-
 def plot_parameter_counts(param_dict, title):
     """
     Creates a horizontal bar chart showing parameter counts for different architectures
@@ -404,6 +420,7 @@ if __name__ == "__main__":
     # exit(0)
     # plot_from_saved()
 
+    """
     param_counts = {
         'CASH': 42469,
         'RNN-EXP': 102149,
@@ -445,8 +462,8 @@ if __name__ == "__main__":
         'RNN-IMP': 100818949
     }
     plot_parameter_counts(param_counts, 'DAgger / Transport')
-
     """
+
     # for last min LN ablation
     # dagger fire
     filename = "final-dagger-fire-ln.pkl"
@@ -464,7 +481,7 @@ if __name__ == "__main__":
 
     df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
 
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
 
     # dagger hmt
     filename = "final-dagger-hmt-ln.pkl"
@@ -483,5 +500,76 @@ if __name__ == "__main__":
     df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
 
     # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
-    """
+    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+
+    # qmix fire
+    filename = "ln-ablation-qmix-fire.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+
+    # QMIX transport
+    filename = "ln-ablation-qmix-transport.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+
+    # mappo fire
+    filename = "ln-ablation-mappo-fire.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
+
+    # mappo transport
+    filename = "ln-ablation-mappo-transport.pkl"
+    df = load_dataframe(filename)
+
+    pd.set_option('display.max_columns', None)
+    print(df.head())
+    
+    # translate baseline names
+    def ln_name(row):
+        if row['use_ln']: 
+            return "CASH"
+        else:
+            return "CASH w/o LN"
+
+    df['baseline'] = df.apply(lambda row: f"{ln_name(row)}", axis=1)
+
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder=".")
