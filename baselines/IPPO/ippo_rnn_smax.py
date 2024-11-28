@@ -87,36 +87,6 @@ class ActorCriticRNN(nn.Module):
 
         return hidden, pi, jnp.squeeze(critic, axis=-1)
 
-class IntentActorCriticRNN(nn.Module):
-    action_dim: Sequence[int]
-    config: Dict
-
-    @nn.compact
-    def __call__(self, hidden, x):
-        obs, dones, avail_actions = x
-
-        # intent rnn
-        embedding = nn.Dense(self.config["FC_DIM_SIZE"], kernel_init=orthogonal(np.sqrt(2)), bias_init=constant(0.0))(obs)
-        embedding = nn.relu(embedding)
-        intent_rnn_in = (embedding, dones)
-        intent_hidden, intent_action_embedding = ScannedRNN()(hidden, rnn_in)
-
-        # Concatenate initial action embedding with observation and pass to Action RNN
-        concat_input = jnp.concatenate([embedding, initial_action_embedding], axis=-1)
-        hidden, action_logits = self.action_rnn(hidden, concat_input)
-
-        # Mask unavailable actions
-        unavail_actions = 1 - avail_actions
-        action_logits = action_logits - (unavail_actions * 1e10)
-        pi = distrax.Categorical(logits=action_logits)
-
-        # Critic network for value estimation
-        critic = nn.Dense(self.config["FC_DIM_SIZE"], kernel_init=orthogonal(2), bias_init=constant(0.0))(embedding)
-        critic = nn.relu(critic)
-        critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(critic)
-
-        return hidden, pi, jnp.squeeze(critic, axis=-1)
-
 
 class Transition(NamedTuple):
     global_done: jnp.ndarray
