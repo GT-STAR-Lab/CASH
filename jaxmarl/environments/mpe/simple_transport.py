@@ -322,7 +322,7 @@ class SimpleTransportMPE(SimpleMPE):
         if self.independent_agents:
             # if independent policies do not sample teams and capabilities, keep constant
             # NOTE: assumes that agent_capacities is n_agent length
-            agent_capacities = self.agent_capacities
+            agent_capacities = self.agent_capacities[0]
         else:
             # randomly sample a team from the capacity team pool
             selected_team = jax.random.choice(key_a, self.agent_capacities.shape[0], shape=(1,))

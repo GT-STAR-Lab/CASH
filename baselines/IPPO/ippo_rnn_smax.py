@@ -407,7 +407,7 @@ def make_train(config):
                 "approx_kl": loss_info[1][4],
                 "clip_frac": loss_info[1][5],
             }
-            
+
             rng = update_state[-1]
 
             def callback(metric):
