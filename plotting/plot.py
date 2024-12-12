@@ -29,16 +29,16 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         print(run.config)
 
         # QMIX/DAgger
-        # hyperaware = run.config.get("alg")["AGENT_HYPERAWARE"]
-        # cap_aware = run.config.get("env")["ENV_KWARGS"]["capability_aware"]
-        # init_scale = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"]
-        # use_ln = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["USE_LAYER_NORM"]
+        hyperaware = run.config.get("alg")["AGENT_HYPERAWARE"]
+        cap_aware = run.config.get("env")["ENV_KWARGS"]["capability_aware"]
+        init_scale = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["INIT_SCALE"]
+        use_ln = run.config.get("alg")["AGENT_HYPERNET_KWARGS"]["USE_LAYER_NORM"]
 
         # MAPPO
-        hyperaware = run.config.get("AGENT_HYPERAWARE")
-        cap_aware = run.config.get("ENV_KWARGS")["capability_aware"]
-        init_scale = run.config.get("AGENT_HYPERNET_KWARGS")["INIT_SCALE"]
-        use_ln = run.config.get("AGENT_HYPERNET_KWARGS")["USE_LAYER_NORM"]
+        # hyperaware = run.config.get("AGENT_HYPERAWARE")
+        # cap_aware = run.config.get("ENV_KWARGS")["capability_aware"]
+        # init_scale = run.config.get("AGENT_HYPERNET_KWARGS")["INIT_SCALE"]
+        # use_ln = run.config.get("AGENT_HYPERNET_KWARGS")["USE_LAYER_NORM"]
 
         # drop the one CASH run with init_scale = 0.5!
         if (hyperaware and cap_aware) and init_scale != 0.2:
@@ -63,7 +63,7 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         run_data['agent_param_count'] = agent_param_count
 
         # for DAgger I didn't log TS, add that (hardcoded based on manual math...)
-        # run_data['timestep'] = 10 * run_data['policy/updates']
+        run_data['timestep'] = 10 * run_data['policy/updates']
 
         print(run_data.head())
 
@@ -86,6 +86,10 @@ def get_from_wandb():
     # NOTE: I've been hardcoding the right things in...
 
     project_name = "JaxMARL"
+
+    # ---------------------------------
+    #           OOD
+    # ---------------------------------
 
     # tags = ['final-qmix-fire']
     # fire_metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
@@ -111,6 +115,10 @@ def get_from_wandb():
     # dagger_hmt_metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
     # agent_param_count_metric = 'policy/agent_param_count'
 
+    # ---------------------------------
+    #           LN-ABLATION
+    # ---------------------------------
+
     # tags = ['final-dagger-hmt-ln']
     # dagger_hmt_metrics = ['policy/updates', 'policy/returns']
     # agent_param_count_metric = 'policy/agent_param_count'
@@ -127,9 +135,36 @@ def get_from_wandb():
     # metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
     # agent_param_count_metric = 'actor_param_count'
 
-    tags = ['ln-ablation-mappo-transport']
-    metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
-    agent_param_count_metric = 'actor_param_count'
+    # tags = ['ln-ablation-mappo-transport']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    # agent_param_count_metric = 'actor_param_count'
+
+    # ---------------------------------
+    #           IN-DIST
+    # ---------------------------------
+    # tags = ['final-qmix-fire-train-only']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
+    # agent_param_count_metric = 'agent_param_count'
+
+    # tags = ['final-qmix-hmt-train-only']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    # agent_param_count_metric = 'agent_param_count'
+
+    # tags = ['final-mappo-fire-train-only']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_fire_success_rate', 'test_snd', 'test_pct_fires_put_out']
+    # agent_param_count_metric = 'actor_param_count'
+
+    # tags = ['final-mappo-hmt-train-only']
+    # metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    # agent_param_count_metric = 'actor_param_count'
+
+    # tags = ['final-dagger-fire-train-only']
+    # metrics = ['policy/updates', 'policy/returns', 'policy/fire_success_rate', 'policy/snd', 'policy/pct_fires_put_out']
+    # agent_param_count_metric = 'policy/agent_param_count'
+
+    tags = ['final-dagger-hmt-train-only']
+    metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
+    agent_param_count_metric = 'policy/agent_param_count'
 
     df = fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric)
     filename = f"{tags[0]}.pkl" 
@@ -162,6 +197,14 @@ def smooth_and_downsample(df, y_column, mean_window=50, std_window=50, downsampl
     for baseline in df_copy['baseline'].unique():
         baseline_data = df_copy[df_copy['baseline'] == baseline].copy()
         baseline_data = baseline_data.sort_values('timestep')
+
+        # grouped = baseline_data.groupby('timestep')[y_column] # .agg(['mean', 'std']).reset_index()
+        max_timesteps = baseline_data['timestep'].max()
+        max_timesteps_rows = baseline_data[baseline_data['timestep'] == max_timesteps]
+        cols = [y_column, 'baseline', 'run_name']
+        print("ALL SEEDS final success rates:")
+        print(max_timesteps_rows[cols])
+        print()
         
         # Group by timestep to calculate mean and std
         grouped = baseline_data.groupby('timestep')[y_column].agg(['mean', 'std']).reset_index()
@@ -186,6 +229,60 @@ def smooth_and_downsample(df, y_column, mean_window=50, std_window=50, downsampl
         smoothed_data.append(smoothed_df)
     
     return pd.concat(smoothed_data)
+
+def give_final_mean_stdev_fire(dfs):
+    # recover mean/stdev without smoothing or downsampling 
+    # TODO: should I have smoothing and downsampling for consistency with the figures?
+    # I think either adding a note about this or simply standardizing both is fine...?
+    for df in dfs:
+        pd.set_option('display.max_columns', None)
+        # print("head")
+        # print(df.head())
+
+        fire_success_rate = "test_fire_success_rate"
+        if fire_success_rate not in df:
+            fire_success_rate = "policy/fire_success_rate"
+
+        fire_mean_stdev = smooth_and_downsample(df, y_column=fire_success_rate, 
+                                                  mean_window=1,
+                                                  std_window=1,
+                                                  downsample_factor=1)
+
+        # Find the maximum value in the 'timesteps' column
+        max_timesteps = fire_mean_stdev['timestep'].max()
+        
+        # Filter rows with the maximum timesteps value
+        max_timesteps_rows = fire_mean_stdev[fire_mean_stdev['timestep'] == max_timesteps]
+        mean_std_cols = [fire_success_rate, fire_success_rate+"_std", "baseline"]
+
+        print("MEAN STDEV final success rates:")
+        print(max_timesteps_rows[mean_std_cols])
+
+def give_final_mean_stdev_hmt(dfs):
+    # see give_final_mean_stdev_fire()
+    for df in dfs:
+        pd.set_option('display.max_columns', None)
+
+        hmt_success_rate = "test_quota_met"
+        if hmt_success_rate not in df:
+            hmt_success_rate = "policy/quota_met"
+
+        hmt_mean_stdev = smooth_and_downsample(df, y_column=hmt_success_rate, 
+                                                  mean_window=1,
+                                                  std_window=1,
+                                                  downsample_factor=1)
+
+        # Find the maximum value in the 'timesteps' column
+        max_timesteps = hmt_mean_stdev['timestep'].max()
+        
+        # Filter rows with the maximum timesteps value
+        max_timesteps_rows = hmt_mean_stdev[hmt_mean_stdev['timestep'] == max_timesteps]
+        mean_std_cols = [hmt_success_rate, hmt_success_rate+"_std", "baseline"]
+
+        print("final success rates:")
+        print(max_timesteps_rows[mean_std_cols])
+        print()
+
 
 def plot_metrics(df, y_label, y_column, title, mean_window, std_window, downsample_factor, save_folder):
     """
@@ -245,7 +342,7 @@ def plot_metrics(df, y_label, y_column, title, mean_window, std_window, downsamp
     plt.tight_layout(pad=0.5)
 
     # plt.show()
-    plt.savefig(f"{save_folder}/{title.replace('/', '')}-{y_label}.png".lower().replace(' ', '-'))
+    # plt.savefig(f"{save_folder}/{title.replace('/', '')}-{y_label}.png".lower().replace(' ', '-'))
 
 def plot_from_saved():
     """
@@ -463,6 +560,32 @@ if __name__ == "__main__":
     }
     plot_parameter_counts(param_counts, 'DAgger / Transport')
     """
+
+    # final mean/stdev of all methods to compare zero-shot to in-dist
+    dfs = []
+    filenames = [
+        # "final-mappo-fire-train-only.pkl",
+        # "final-dagger-fire-train-only.pkl",
+        # "final-qmix-fire-train-only.pkl",
+        # "final-mappo-fire.pkl",
+        # "final-dagger-fire.pkl",
+        # "final-qmix-fire.pkl",
+        "final-mappo-hmt-train-only.pkl",
+        "final-dagger-hmt-train-only.pkl",
+        "final-qmix-hmt-train-only.pkl",
+        "final-mappo-hmt.pkl",
+        "final-dagger-hmt.pkl",
+        "final-qmix-hmt.pkl",
+    ]
+    for filename in filenames:
+        df = load_dataframe(filename)
+        # translate baseline names
+        df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+        dfs.append(df)
+
+    # give_final_mean_stdev_fire(dfs)
+    give_final_mean_stdev_hmt(dfs)
+    exit(0)
 
     # for last min LN ablation
     # dagger fire
