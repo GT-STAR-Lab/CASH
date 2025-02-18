@@ -1,3 +1,22 @@
+# Capability-Aware Shared Hypernetworks (CASH)
+
+*AAMAS 2025 Extended Abstract*
+
+This is the source code for the paper _Learning Flexible Heterogeneous Coordination With Capability-Aware Shared Hypernetworks_, which was accepted to AAMAS 2025 as an extended abstract  (TODO: add link).
+
+Relevant files:
+ - Our implementation of [CASH](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/policies/policies.py#L128) and [RNN-IMP/EXP](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/policies/policies.py#L104) (capabilty-awareness toggled on/off from the env files)
+ - [MPE Firefighting environment](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/environments/mpe/simple_fire.py)
+ - [MPE Transport environment](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/environments/mpe/simple_transport.py)
+ - DAgger [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/imitation_learning/dagger.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/imitation_learning/config/alg/dagger.yaml)
+ - QMIX [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/QLearning/qmix.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/QLearning/config/alg/qmix_mpe.yaml)
+ - MAPPO [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py)
+ - [Plotting scripts](https://github.com/GT-STAR-Lab/CASH/tree/plotting/plotting)
+
+As it is a fork of the JaxMARL repo, the rest of this README is from the JaxMARL team.
+
+-----------
+
 <h1 align="center">JaxMARL</h1>
 
 <p align="center">
