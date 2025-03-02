@@ -13,7 +13,7 @@ Relevant files:
  - MAPPO [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py)
  - [Plotting scripts](https://github.com/GT-STAR-Lab/CASH/tree/plotting/plotting)
 
-As it is a fork of the JaxMARL repo, the rest of this README is from the JaxMARL team.
+As it is a fork of the [JaxMARL repo](https://github.com/FLAIROx/JaxMARL/tree/main), the rest of this README is from the JaxMARL team.
 
 -----------
 
