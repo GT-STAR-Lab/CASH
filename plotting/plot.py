@@ -41,9 +41,9 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         # use_ln = run.config.get("AGENT_HYPERNET_KWARGS")["USE_LAYER_NORM"]
 
         # drop the one CASH run with init_scale = 0.5!
-        if (hyperaware and cap_aware) and init_scale != 0.2:
-            print(f"\nDropping {run.name} w/ init_scale != 0.2!\n")
-            continue
+        # if (hyperaware and cap_aware) and init_scale != 0.2:
+        #     print(f"\nDropping {run.name} w/ init_scale != 0.2!\n")
+        #     continue
 
         # NOTE: agent_param_count is only plotted once and thus cannot be found in the same scan_history() call as the other metrics, finding manually here:
         agent_param_count = run.scan_history(keys=[agent_param_count_metric])
@@ -63,7 +63,7 @@ def fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric):
         run_data['agent_param_count'] = agent_param_count
 
         # for DAgger I didn't log TS, add that (hardcoded based on manual math...)
-        run_data['timestep'] = 10 * run_data['policy/updates']
+        # run_data['timestep'] = 10 * run_data['policy/updates']
 
         print(run_data.head())
 
@@ -162,9 +162,13 @@ def get_from_wandb():
     # metrics = ['policy/updates', 'policy/returns', 'policy/fire_success_rate', 'policy/snd', 'policy/pct_fires_put_out']
     # agent_param_count_metric = 'policy/agent_param_count'
 
-    tags = ['final-dagger-hmt-train-only']
-    metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
-    agent_param_count_metric = 'policy/agent_param_count'
+    # tags = ['final-dagger-hmt-train-only']
+    # metrics = ['policy/updates', 'policy/returns', 'policy/snd', 'policy/makespan', 'policy/quota_met', 'policy/loss']
+    # agent_param_count_metric = 'policy/agent_param_count'
+
+    tags = ['final-mining-scale-id']
+    metrics = ['timestep', 'returns', 'test_returns', 'test_makespan', 'test_snd', 'test_quota_met']
+    agent_param_count_metric = 'agent_param_count'
 
     df = fetch_wandb_data(project_name, tags, metrics, agent_param_count_metric)
     filename = f"{tags[0]}.pkl" 
@@ -338,11 +342,11 @@ def plot_metrics(df, y_label, y_column, title, mean_window, std_window, downsamp
     plt.xlabel('Timestep')
     plt.ylabel(y_label)
     plt.title(title)
-    # plt.legend(loc='best')
+    plt.legend(loc='best')
     plt.tight_layout(pad=0.5)
 
     # plt.show()
-    # plt.savefig(f"{save_folder}/{title.replace('/', '')}-{y_label}.png".lower().replace(' ', '-'))
+    plt.savefig(f"{save_folder}/{title.replace('/', '')}-{y_label}.png".lower().replace(' ', '-'))
 
 def plot_from_saved():
     """
@@ -359,24 +363,107 @@ def plot_from_saved():
     exit(0)
     """
 
-    # QMIX Fire
-    filename = "final-qmix-fire.pkl"
-    df = load_dataframe(filename)
+    # # QMIX Fire
+    # filename = "final-qmix-fire.pkl"
+    # df = load_dataframe(filename)
 
-    pd.set_option('display.max_columns', None)
-    print(df.head())
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
     
-    # translate baseline names
-    df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
-    # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+    # # Fire
+    # plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='QMIX / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+
+    # # qmix hmt
+    # filename = "final-qmix-hmt.pkl"
+    # df = load_dataframe(filename)
+
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
+    
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+
+    # # HMT
+    # plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+    # plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
+
+    # # mappo Fire
+    # filename = "final-mappo-fire.pkl"
+    # df = load_dataframe(filename)
+
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
+    
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+    # # Fire
+    # plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+
+    # # mappo HMT
+    # filename = "final-mappo-hmt.pkl"
+    # df = load_dataframe(filename)
+
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
+    
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+
+    # # HMT
+    # plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+    # plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
+
+
+    # # DAGGER FIRE
+    # # load preprocessed data
+    # filename = "final-dagger-fire.pkl"
+    # df = load_dataframe(filename)
+
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
+    
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+    # # Fire
+    # plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='Success Rate', y_column='policy/fire_success_rate', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='policy/pct_fires_put_out', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+
+    # # dagger HMT
+    # filename = "final-dagger-hmt.pkl"
+    # df = load_dataframe(filename)
+
+    # pd.set_option('display.max_columns', None)
+    # print(df.head())
+    
+    # # translate baseline names
+    # df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
+
+    # # HMT
+    # plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='Success Rate', y_column='policy/quota_met', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    # plot_metrics(df, y_label='Makespan', y_column='policy/makespan', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
 
     # qmix hmt
-    filename = "final-qmix-hmt.pkl"
+    filename = "final-mining-scale-id.pkl"
     df = load_dataframe(filename)
 
     pd.set_option('display.max_columns', None)
@@ -386,77 +473,11 @@ def plot_from_saved():
     df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
 
     # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='QMIX / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="qmix")
-
-    # mappo Fire
-    filename = "final-mappo-fire.pkl"
-    df = load_dataframe(filename)
-
-    pd.set_option('display.max_columns', None)
-    print(df.head())
-    
-    # translate baseline names
-    df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
-    # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Success Rate', y_column='test_fire_success_rate', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='test_pct_fires_put_out', title='MAPPO / Firefighting', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-
-    # mappo HMT
-    filename = "final-mappo-hmt.pkl"
-    df = load_dataframe(filename)
-
-    pd.set_option('display.max_columns', None)
-    print(df.head())
-    
-    # translate baseline names
-    df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
-
-    # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='SND', y_column='test_snd', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='MAPPO / Transport', mean_window=100, std_window=100, downsample_factor=10, save_folder="mappo")
-
-
-    # DAGGER FIRE
-    # load preprocessed data
-    filename = "final-dagger-fire.pkl"
-    df = load_dataframe(filename)
-
-    pd.set_option('display.max_columns', None)
-    print(df.head())
-    
-    # translate baseline names
-    df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
-    # Fire
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Success Rate', y_column='policy/fire_success_rate', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Pct of Fires Extinguished', y_column='policy/pct_fires_put_out', title='DAgger / Firefighting', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-
-    # dagger HMT
-    filename = "final-dagger-hmt.pkl"
-    df = load_dataframe(filename)
-
-    pd.set_option('display.max_columns', None)
-    print(df.head())
-    
-    # translate baseline names
-    df['baseline'] = df.apply(lambda row: f"{baseline_name(row)}", axis=1)
-
-    # HMT
-    plot_metrics(df, y_label='Training Returns', y_column='policy/returns', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='SND', y_column='policy/snd', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Success Rate', y_column='policy/quota_met', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
-    plot_metrics(df, y_label='Makespan', y_column='policy/makespan', title='DAgger / Transport', mean_window=100, std_window=100, downsample_factor=1, save_folder="dagger")
+    plot_metrics(df, y_label='Training Returns', y_column='returns', title='QMIX / Mining', mean_window=100, std_window=100, downsample_factor=10, save_folder="scale")
+    plot_metrics(df, y_label='Test Returns', y_column='test_returns', title='QMIX / Mining', mean_window=100, std_window=100, downsample_factor=10, save_folder="scale")
+    plot_metrics(df, y_label='SND', y_column='test_snd', title='QMIX / Mining', mean_window=100, std_window=100, downsample_factor=10, save_folder="scale")
+    plot_metrics(df, y_label='Success Rate', y_column='test_quota_met', title='QMIX / Mining', mean_window=100, std_window=100, downsample_factor=10, save_folder="scale")
+    plot_metrics(df, y_label='Makespan', y_column='test_makespan', title='QMIX / Mining', mean_window=100, std_window=100, downsample_factor=10, save_folder="scale")
 
 def plot_parameter_counts(param_dict, title):
     """
@@ -516,6 +537,7 @@ if __name__ == "__main__":
     # get_from_wandb()
     # exit(0)
     # plot_from_saved()
+    # exit(0)
 
     """
     param_counts = {
@@ -570,12 +592,13 @@ if __name__ == "__main__":
         # "final-mappo-fire.pkl",
         # "final-dagger-fire.pkl",
         # "final-qmix-fire.pkl",
-        "final-mappo-hmt-train-only.pkl",
-        "final-dagger-hmt-train-only.pkl",
-        "final-qmix-hmt-train-only.pkl",
-        "final-mappo-hmt.pkl",
-        "final-dagger-hmt.pkl",
-        "final-qmix-hmt.pkl",
+        # "final-mappo-hmt-train-only.pkl",
+        # "final-dagger-hmt-train-only.pkl",
+        # "final-qmix-hmt-train-only.pkl",
+        # "final-mappo-hmt.pkl",
+        # "final-dagger-hmt.pkl",
+        # "final-qmix-hmt.pkl",
+        "final-mining-scale-ood.pkl"
     ]
     for filename in filenames:
         df = load_dataframe(filename)
@@ -586,6 +609,7 @@ if __name__ == "__main__":
     # give_final_mean_stdev_fire(dfs)
     give_final_mean_stdev_hmt(dfs)
     exit(0)
+    # exit(0)
 
     # for last min LN ablation
     # dagger fire
