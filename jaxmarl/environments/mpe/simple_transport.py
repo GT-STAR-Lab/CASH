@@ -23,15 +23,16 @@ class SimpleTransportMPE(SimpleMPE):
         landmarks = ["landmark_{}".format(i) for i in range(3)]
 
         self.num_agents = num_agents
+        self.num_neighbors = kwargs.get("num_neighbors", num_agents-1)
         self.capability_aware = capability_aware
         self.num_capabilities = num_capabilities
-        self.dim_capabilities = num_agents * num_capabilities
+        self.dim_capabilities = (self.num_neighbors+1) * num_capabilities
         self.test_team_capacities = kwargs.get("test_team_capacities", None)
         if self.test_team_capacities is not None:
             self.test_team_capacities = jnp.array(self.test_team_capacities)
 
         # observation dimensions
-        pos_dim = num_agents * 2
+        pos_dim = self.num_neighbors * 2
         vel_dim = 2  # for ego agent
         material_depot_dim = 2 * 2 # 2 materials, 2 positions
         construction_site_dim = 2
@@ -175,6 +176,15 @@ class SimpleTransportMPE(SimpleMPE):
 
     def get_obs(self, state: State) -> Dict[str, chex.Array]:
         def _obs(aidx: int):
+            def get_nearest_neighbors(aidx):
+                """
+                Returns the indices of the n nearest neighbors to agent aidx
+                """
+                agent_pos = state.p_pos[:self.num_agents]
+                dists = jnp.linalg.norm(agent_pos - agent_pos[aidx], axis=1)
+                nearest_indices = jnp.argsort(dists)[1:self.num_neighbors+1]
+                return nearest_indices
+
             def shift_array(arr, i):
                 """
                 Assuming arr is 2D, moves row i to the front
@@ -183,10 +193,13 @@ class SimpleTransportMPE(SimpleMPE):
                 first_part = arr[i:]
                 second_part = arr[:i]
                 return jnp.concatenate([first_part, second_part])
+            
+            # get neighbor indices
+            nbr_idxs = get_nearest_neighbors(aidx)
 
             # agent positions, move ego_pos to front of agent_pos, then remove
             agent_pos = state.p_pos[:self.num_agents, :]
-            other_pos = shift_array(agent_pos, aidx)
+            other_pos = state.p_pos[nbr_idxs, :]
             ego_pos = other_pos[0]
             other_pos = other_pos[1:]
             rel_other_pos = other_pos - ego_pos # and transform to relative pos
@@ -197,7 +210,7 @@ class SimpleTransportMPE(SimpleMPE):
             # agent capabilities, separate ego capability from other agents capability
             other_cap = state.capacity
             ego_cap = other_cap[aidx, :]
-            other_cap = jnp.roll(other_cap, shift=self.num_agents - aidx - 1, axis=0)[:self.num_agents-1, :]
+            other_cap = other_cap[nbr_idxs, :]
 
             # mask out capabilities for non-capability-aware baselines
             if not self.capability_aware:
