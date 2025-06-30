@@ -6,7 +6,7 @@ TOTAL_TIMESTEPS: 5e6 # 2050000
 
 # agent network params
 PARAMETERS_SHARING: True
-AGENT_HIDDEN_DIM: 64 # width of the RNN hidden dim + surrounding MLP layers
+AGENT_HIDDEN_DIM: 128 # width of the RNN hidden dim + surrounding MLP layers
 AGENT_RECURRENT: True
 AGENT_INIT_SCALE: 2.
 AGENT_HYPERAWARE: False

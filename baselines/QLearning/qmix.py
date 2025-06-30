@@ -545,7 +545,8 @@ def make_train(config, log_train_env, log_test_env, viz_test_env, env_name="MPE_
             )
 
             # get snd, NOTE: dim_c multiplier is currently hardcoded since it works for both fire and transport
-            snd_value = snd(rollouts=obs, hiddens=hstate, dim_c=len(test_env.training_agents)*2, params=params, alg='qmix' if config["PARAMETERS_SHARING"] else 'qmix_ns', agent=agent)
+            multiplier = 5 if test_env._env.id_aware else 2
+            snd_value = snd(rollouts=obs, hiddens=hstate, dim_c=len(test_env.training_agents)*multiplier, params=params, alg='qmix' if config["PARAMETERS_SHARING"] else 'qmix_ns', agent=agent)
 
             def fire_env_metrics(final_env_state):
                 """
@@ -691,14 +692,16 @@ def main(config):
 
     hyper_tag = "hyper" if config["alg"]["AGENT_HYPERAWARE"] else "normal"
     recurrent_tag = "RNN" if config["alg"]["AGENT_RECURRENT"] else "MLP"
-    aware_tag = "aware" if config["env"]["ENV_KWARGS"]["capability_aware"] else "unaware"
+    cap_aware_tag = "cap aware" if config["env"]["ENV_KWARGS"]["capability_aware"] else "cap unaware"
+    id_aware_tag = "id aware" if config["env"]["ENV_KWARGS"]["id_aware"] else "id unaware"
 
     wandb_tags = [
         alg_name.upper(),
         env_name,
         hyper_tag,
         recurrent_tag,
-        aware_tag,
+        cap_aware_tag,
+        id_aware_tag,
         "TD_LOSS" if config["alg"].get("TD_LAMBDA_LOSS", True) else "DQN_LOSS",
         f"jax_{jax.__version__}",
     ]
@@ -710,7 +713,7 @@ def main(config):
         entity=config["ENTITY"],
         project=config["PROJECT"],
         tags=wandb_tags,
-        name=f'{alg_name} / {hyper_tag} {recurrent_tag} {aware_tag} / {env_name}',
+        name=f'{alg_name} / {hyper_tag} {recurrent_tag} / {cap_aware_tag} {id_aware_tag} / {env_name}',
         config=config,
         mode=config["WANDB_MODE"],
     )

@@ -33,6 +33,7 @@ class State:
     payload: chex.Array = None # [n, 2] representing agent's current payload, used in: SimpleTransport
     capacity: chex.Array = None # [t, n, 2] representing t possible teams with n agent's carrying capacity, used in: SimpleTransport
     site_quota: chex.Array = None # [2] representing remaining materials needed to meet quota, used in: SimpleTransport
+    agent_ids: chex.Array = None # [n, 5] representing agent's ids
 
 class SimpleMPE(MultiAgentEnv):
     def __init__(
@@ -128,11 +129,12 @@ class SimpleMPE(MultiAgentEnv):
 
         self.dt = dt
 
+        self.agent_ids = jnp.eye(5) #NOTE this is hardcoded to just run the experiment with current configs
         if "agent_rads" in kwargs:
             self.agent_rads = kwargs["agent_rads"]
             # assert (len(self.agent_rads) >= self.num_agents), f"Not enough agent_rads, {len(self.agent_rads)} < {self.num_agents}"
             self.agent_rads = jnp.array(self.agent_rads)
-
+            
         if "agent_accels" in kwargs:
             self.agent_accels = kwargs["agent_accels"]
             # assert (len(self.agent_accels) >= self.num_agents), f"Not enough agent_accels, {len(self.agent_accels)} < {self.num_agents}"
@@ -143,6 +145,7 @@ class SimpleMPE(MultiAgentEnv):
             self.agent_capacities = jnp.array(self.agent_capacities)
         else:
             self.agent_capacities = None
+        
 
         if "site_quota" in kwargs:
             self.site_quota = kwargs["site_quota"]
@@ -299,10 +302,12 @@ class SimpleMPE(MultiAgentEnv):
         #     team_capabilities = jnp.asarray(self.test_capabilities)
 
 
+        agent_ids = self.agent_ids[selected_agents]
         agent_rads = self.agent_rads[selected_agents]
         agent_accels = self.agent_accels[selected_agents]
         agent_capacities = self.agent_capacities[selected_agents] if self.agent_capacities else np.zeros((self.num_agents, 2))
-
+        agent_ids = self.agent_ids[(agent_capacities[:, 0]*10) // 1] if self.agent_capacities else agent_ids
+        print(agent_ids)
         state = State(
             p_pos=p_pos,
             p_vel=jnp.zeros((self.num_entities, self.dim_p)),
@@ -316,6 +321,7 @@ class SimpleMPE(MultiAgentEnv):
             step=0,
             payload=jnp.zeros((self.num_agents, 1)),
             capacity=agent_capacities,
+            agent_ids=agent_ids,
         )
 
         return self.get_obs(state), state

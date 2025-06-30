@@ -29,6 +29,10 @@ class SimpleTransportMPE(SimpleMPE):
         self.test_team_capacities = kwargs.get("test_team_capacities", None)
         if self.test_team_capacities is not None:
             self.test_team_capacities = jnp.array(self.test_team_capacities)
+        
+        self.id_aware = kwargs.get("id_aware", False)
+        if self.id_aware:
+            self.dim_capabilities = 5 * num_agents
 
         # observation dimensions
         pos_dim = num_agents * 2
@@ -199,10 +203,13 @@ class SimpleTransportMPE(SimpleMPE):
             ego_cap = other_cap[aidx, :]
             other_cap = jnp.roll(other_cap, shift=self.num_agents - aidx - 1, axis=0)[:self.num_agents-1, :]
 
-            # mask out capabilities for non-capability-aware baselines
             if not self.capability_aware:
-                other_cap = jnp.full(other_cap.shape, MASK_VAL)
-                ego_cap = jnp.full(ego_cap.shape, MASK_VAL)
+                if not self.id_aware:
+                    other_cap = jnp.full(other_cap.shape, MASK_VAL)
+                    ego_cap = jnp.full(ego_cap.shape, MASK_VAL)
+                else:
+                    ego_cap = state.agent_ids[aidx]
+                    other_cap = jnp.roll(state.agent_ids, shift=self.num_agents - aidx - 1, axis=0)[:self.num_agents-1]
 
             # relative position of all landmarks
             landmark_p_pos = state.p_pos[self.num_agents:]
@@ -327,6 +334,7 @@ class SimpleTransportMPE(SimpleMPE):
             # randomly sample a team from the capacity team pool
             selected_team = jax.random.choice(key_a, self.agent_capacities.shape[0], shape=(1,))
             agent_capacities = self.agent_capacities[selected_team].squeeze()
+            agent_ids = self.agent_ids[(agent_capacities[:, 0] * 10).astype(int)]
             # if a test distribution is provided and this is a test_env, override capacities
             # NOTE: also add other capabilities here?
             if self.test_env_flag and self.test_team_capacities is not None:
@@ -357,7 +365,8 @@ class SimpleTransportMPE(SimpleMPE):
             step=0,
             payload=jnp.zeros((self.num_agents, 2)),
             capacity=agent_capacities,
-            site_quota=self.site_quota
+            site_quota=self.site_quota,
+            agent_ids=agent_ids
         )
 
         return self.get_obs(state), state

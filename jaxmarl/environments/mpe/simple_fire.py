@@ -24,6 +24,10 @@ class SimpleFireMPE(SimpleMPE):
         self.num_capabilities = num_capabilities
         self.dim_capabilities = num_agents * num_capabilities
 
+        self.id_aware = kwargs.get("id_aware", False)
+        if self.id_aware:
+            self.dim_capabilities = 5 * num_agents
+
         # components of the observation
         pos_dim = num_agents * 2
         vel_dim = 2 # only ego agent
@@ -97,8 +101,12 @@ class SimpleFireMPE(SimpleMPE):
 
             # mask out capabilities for non-capability-aware baselines
             if not self.capability_aware:
-                other_cap = jnp.full(other_cap.shape, MASK_VAL)
-                ego_cap = jnp.full(ego_cap.shape, MASK_VAL)
+                if not self.id_aware:
+                    other_cap = jnp.full(other_cap.shape, MASK_VAL)
+                    ego_cap = jnp.full(ego_cap.shape, MASK_VAL)
+                else:
+                    ego_cap = state.agent_ids[aidx]
+                    other_cap = jnp.roll(state.agent_ids, shift=self.num_agents - aidx - 1, axis=0)[:self.num_agents-1]
 
             # give agents the pos and rad of all landmarks (fires)
             landmark_p_pos = state.p_pos[self.num_agents:]
@@ -250,6 +258,7 @@ class SimpleFireMPE(SimpleMPE):
             selected_agents = jax.random.choice(key_c, self.num_agents, shape=(self.num_agents,), replace=False)
             agent_rads = self.agent_rads[selected_agents]
             agent_accels = self.agent_accels[selected_agents]
+            agent_ids = self.agent_ids[selected_agents]
             # unless a test distribution is provided and this is a test_env
             if self.test_env_flag and self.test_teams is not None:
                 # pick one of the test teams at random
@@ -269,6 +278,7 @@ class SimpleFireMPE(SimpleMPE):
             ),
             done=jnp.full((self.num_agents), False),
             step=0,
+            agent_ids=agent_ids
         )
 
         return self.get_obs(state), state
