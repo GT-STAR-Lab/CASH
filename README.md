@@ -1,8 +1,11 @@
 # Capability-Aware Shared Hypernetworks (CASH)
 
-*AAMAS 2025 Extended Abstract*
 
-This is the source code for the paper _Learning Flexible Heterogeneous Coordination With Capability-Aware Shared Hypernetworks_, which was accepted to AAMAS 2025 as an extended abstract  (TODO: add link).
+This is the source code of the following paper 
+
+Kevin Fu*, Shalin Jain*, Pierce Howell, Harish Ravichandar, "**[Capability-Aware Shared Hypernetworks for Flexible Heterogeneous Multi-Robot Coordination](https://star-lab.cc.gatech.edu/papers/fu-jain-CASH-CoRL/)**", _Conference on Robot Learning (CORL)_, 2025
+<br> (* equal contribution) 
+
 
 Relevant files:
  - Our implementation of [CASH](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/policies/policies.py#L128) and [RNN-IMP/EXP](https://github.com/GT-STAR-Lab/CASH/blob/main/jaxmarl/policies/policies.py#L104) (capabilty-awareness toggled on/off from the env files)
@@ -12,6 +15,17 @@ Relevant files:
  - QMIX [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/QLearning/qmix.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/QLearning/config/alg/qmix_mpe.yaml)
  - MAPPO [implementation](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py) and [config](https://github.com/GT-STAR-Lab/CASH/blob/main/baselines/MAPPO/mappo_rnn_mpe.py)
  - [Plotting scripts](https://github.com/GT-STAR-Lab/CASH/tree/plotting/plotting)
+
+<h2 name="cite" id="cite">Citing CASH 📜 </h2>
+
+```
+@inproceedings{fu-jain-CASH-CoRL-2025,
+      title={Capability-Aware Shared Hypernetworks for Flexible Heterogeneous Multi-Robot Coordination},
+      author={Kevin Fu and Shalin Jain and Pierce Howell and Harish Ravichandar},
+      booktitle={Conference on Robot Learning (CORL)},
+      year={2025}
+    }
+```
 
 As it is a fork of the [JaxMARL repo](https://github.com/FLAIROx/JaxMARL/tree/main), the rest of this README is from the JaxMARL team.
 
